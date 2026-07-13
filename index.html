@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventario de compras</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2a78d6">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Inventario">
+<style>
+  :root {
+    --surface-1:      #fcfcfb;
+    --page-plane:      #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --series-1: #2a78d6; /* blue - casa / tienda */
+    --series-2: #1baf7a; /* aqua - familia */
+    --series-emph: #2a78d6;
+    --series-gray:  #c3c2b7;
+    --card-radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --surface-1:      #1a1a19;
+      --page-plane:      #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --series-1: #3987e5;
+      --series-2: #199e70;
+      --series-emph: #3987e5;
+      --series-gray:  #383835;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page-plane);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 20px 16px 60px; }
+  header.page-header { margin-bottom: 18px; }
+  header.page-header h1 { font-size: 22px; margin: 0 0 4px; }
+  header.page-header p { margin: 0; color: var(--text-secondary); font-size: 14px; line-height: 1.5; }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: var(--card-radius);
+    padding: 16px;
+  }
+  .card + .card { margin-top: 16px; }
+  .card h2 { font-size: 15px; margin: 0 0 12px; color: var(--text-primary); }
+  .card h2 .muted { color: var(--text-muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+
+  /* --- Añadir recibo --- */
+  .add-receipt { display: flex; flex-direction: column; gap: 10px; }
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 10px; margin-top: 4px; }
+  .step { background: var(--page-plane); border: 1px dashed var(--border); border-radius: 10px; padding: 10px 12px; font-size: 13px; color: var(--text-secondary); }
+  .step b { display:block; color: var(--text-primary); font-size: 13px; margin-bottom: 2px;}
+  .photo-picker { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .photo-picker label.btn {
+    background: var(--series-1); color: #fff; padding: 10px 16px; border-radius: 10px;
+    font-size: 14px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .photo-picker input[type=file] { display: none; }
+  #photoPreview { display:none; max-width: 120px; max-height: 120px; border-radius: 10px; border: 1px solid var(--border); object-fit: cover; }
+  .hint { font-size: 12.5px; color: var(--text-muted); }
+
+  /* --- Filters --- */
+  .filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+  .filters select, .filters input[type=date] {
+    background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; font-size: 13px; font-family: inherit;
+  }
+  .filters label { font-size: 12.5px; color: var(--text-muted); margin-right: 4px; }
+
+  /* --- KPI row --- */
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 12px; margin-bottom: 16px; }
+  .kpi { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--card-radius); padding: 14px 16px; }
+  .kpi .label { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+  .kpi .value { font-size: 24px; font-weight: 700; }
+  .kpi .sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .charts-grid { grid-template-columns: 1fr; } }
+
+  svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .axis-label { fill: var(--text-muted); font-size: 11px; }
+  .bar-label { fill: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .gridline { stroke: var(--gridline); stroke-width: 1; }
+  .baseline { stroke: var(--baseline); stroke-width: 1; }
+  .legend { display:flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; font-size: 12.5px; color: var(--text-secondary);}
+  .legend .dot { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:6px; vertical-align:middle;}
+
+  .tooltip {
+    position: fixed; pointer-events: none; background: var(--text-primary); color: var(--surface-1);
+    font-size: 12px; padding: 6px 9px; border-radius: 6px; z-index: 50; display:none; white-space: nowrap;
+  }
+
+  /* --- Table --- */
+  .table-toolbar { display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+  .table-toolbar input[type=search] {
+    flex: 1; min-width: 160px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--page-plane); color: var(--text-primary); font-size: 13px; font-family: inherit;
+  }
+  .btn-export {
+    background: var(--series-1); color: #fff; border: none; border-radius: 8px; padding: 9px 14px;
+    font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer; white-space: nowrap;
+  }
+  .btn-export:active { opacity: 0.85; }
+
+  /* --- Menú semanal --- */
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600;
+    padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+  }
+  .status-ok { background: rgba(12,163,12,0.14); color: #0ca30c; }
+  .status-missing { background: rgba(208,59,59,0.14); color: #d03b3b; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    text-align: left; padding: 8px 8px; color: var(--text-muted); font-weight: 600; font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: .02em; border-bottom: 1px solid var(--baseline);
+    cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  thead th:hover { color: var(--text-primary); }
+  tbody td { padding: 8px 8px; border-bottom: 1px solid var(--gridline); }
+  tbody tr:hover { background: var(--page-plane); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .empty-note { color: var(--text-muted); font-size: 13px; padding: 10px 0; }
+
+  footer.note { margin-top: 22px; font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="page-header">
+    <h1>Inventario de compras</h1>
+    <p>Gasto por vivienda, trabajador, tienda, familia de producto y fecha, a partir de los recibos fotografiados.</p>
+  </header>
+
+  <div class="card add-receipt">
+    <h2>Añadir un recibo nuevo</h2>
+    <div class="photo-picker">
+      <label class="btn" for="receiptPhoto">📷 Añadir foto del recibo</label>
+      <input type="file" id="receiptPhoto" accept="image/*" capture="environment">
+      <img id="photoPreview" alt="Vista previa del recibo">
+      <span class="hint" id="photoHint">Aún no has seleccionado ninguna foto.</span>
+    </div>
+    <div class="steps">
+      <div class="step"><b>1. Añade la foto aquí</b>solo para verla en grande antes de enviarla — esta página no procesa la imagen por sí sola.</div>
+      <div class="step"><b>2. Envíasela a Claude en el chat</b>Claude lee el ticket y extrae tienda, productos, familia e importe.</div>
+      <div class="step"><b>3. Elige trabajador y vivienda</b>Claude te preguntará quién ha hecho la compra y para qué vivienda es.</div>
+      <div class="step"><b>4. Recibirás esta página actualizada</b>con el recibo ya añadido a las gráficas y a la tabla de productos.</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <div class="filters">
+      <div>
+        <label for="filterVivienda">Vivienda</label>
+        <select id="filterVivienda"><option value="__all__">Todas</option></select>
+      </div>
+      <div>
+        <label for="filterTrabajador">Trabajador</label>
+        <select id="filterTrabajador"><option value="__all__">Todos</option></select>
+      </div>
+      <div>
+        <label for="filterTienda">Tienda</label>
+        <select id="filterTienda"><option value="__all__">Todas</option></select>
+      </div>
+      <div>
+        <label for="filterPeriodo">Periodo</label>
+        <select id="filterPeriodo">
+          <option value="todo">Todo</option>
+          <option value="semana_actual">Esta semana</option>
+          <option value="semana_pasada">Semana pasada</option>
+          <option value="mes_actual">Este mes</option>
+          <option value="mes_pasado">Mes pasado</option>
+          <option value="personalizado">Rango personalizado</option>
+        </select>
+      </div>
+      <div>
+        <label for="fechaDesde">Desde</label>
+        <input type="date" id="fechaDesde">
+      </div>
+      <div>
+        <label for="fechaHasta">Hasta</label>
+        <input type="date" id="fechaHasta">
+      </div>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi"><div class="label">Gasto total</div><div class="value" id="kpiTotal">–</div></div>
+      <div class="kpi"><div class="label">Nº de recibos</div><div class="value" id="kpiRecibos">–</div></div>
+      <div class="kpi"><div class="label">Día de mayor gasto</div><div class="value" id="kpiDiaMax">–</div><div class="sub" id="kpiDiaMaxSub"></div></div>
+      <div class="kpi"><div class="label">Gasto medio por recibo</div><div class="value" id="kpiMedio">–</div></div>
+    </div>
+
+    <div class="charts-grid">
+      <div>
+        <h2>Gasto por vivienda</h2>
+        <div id="chartVivienda"></div>
+      </div>
+      <div>
+        <h2>Gasto por trabajador</h2>
+        <div id="chartTrabajador"></div>
+      </div>
+      <div>
+        <h2>Gasto por tienda</h2>
+        <div id="chartTienda"></div>
+      </div>
+      <div>
+        <h2>Gasto por día <span class="muted">— el día con más gasto queda destacado</span></h2>
+        <div id="chartDia"></div>
+      </div>
+      <div>
+        <h2>Gasto por familia de producto</h2>
+        <div id="chartFamilia"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <h2>Productos comprados <span class="muted">— toca una columna para ordenar</span></h2>
+    <div class="table-toolbar">
+      <input type="search" id="searchProducto" placeholder="Buscar producto...">
+      <button type="button" id="btnExport" class="btn-export">📥 Exportar a hoja de cálculo</button>
+    </div>
+    <p class="hint" style="margin:-4px 0 10px;">Exporta exactamente lo que ves filtrado arriba (vivienda, trabajador, tienda, periodo y búsqueda) a un archivo .csv que abre directamente en Excel, Google Sheets o Numbers.</p>
+    <div id="tableWrap"></div>
+  </div>
+
+  <div class="card add-receipt" style="margin-top:16px;">
+    <h2>Añadir un menú semanal nuevo</h2>
+    <div class="steps">
+      <div class="step"><b>1. Envíame la foto del menú</b>aquí en el chat, tal como haces con los recibos.</div>
+      <div class="step"><b>2. Dime vivienda y semana</b>para qué vivienda es y qué semana cubre (o te confirmo yo la que entiendo por las fechas).</div>
+      <div class="step"><b>3. Extraigo el ingrediente principal de cada día</b>solo carne, pescado y similares — las verduras de acompañamiento no se comprueban.</div>
+      <div class="step"><b>4. Te devuelvo esta página</b>con el nuevo menú ya cotejado contra la compra de esa semana.</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <h2>Menú semanal vs. compra <span class="muted">— ¿tienes ya lo necesario?</span></h2>
+    <div class="filters" style="margin-bottom:12px;">
+      <div>
+        <label for="selMenu">Menú</label>
+        <select id="selMenu"></select>
+      </div>
+    </div>
+    <div id="menuSummary"></div>
+    <div id="menuCheckWrap"></div>
+    <h2 style="margin-top:18px;">Compras fuera de este menú <span class="muted">— posible gasto no planificado</span></h2>
+    <p class="hint" style="margin:-4px 0 10px;">Carne, pescado o congelados comprados esa semana para esta vivienda que no corresponden a ningún plato del menú.</p>
+    <div id="offMenuSummary"></div>
+    <div id="offMenuWrap"></div>
+  </div>
+
+  <footer class="note">
+    Los datos de esta página se generan a partir de los recibos que envías por el chat — no se guardan
+    cambios hechos aquí directamente (es una página estática). Si algo está mal categorizado, dímelo en
+    el chat y te reenvío la página corregida.
+  </footer>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+const DATA = {"config": {"viviendas": ["Manuel de la Quintana", "Calle Franco"], "trabajadores": ["Manuel", "César", "Mariluz", "Martina", "Yamila"], "familias": ["Carnicería", "Pescadería", "Frutería y verdura", "Panadería y pastelería", "Lácteos y huevos", "Congelados", "Bebidas", "Despensa / Alimentación general", "Limpieza del hogar", "Higiene personal", "Mascotas", "Otros"], "tiendas": ["Mercadona", "Carrefour", "Día", "Lidl"]}, "recibos": [{"id": "R0001", "fecha": "2026-07-05", "vivienda": "Manuel de la Quintana", "trabajador": "César", "tienda": "Mercadona", "importeTotal": 24.2, "metodoPago": "Tarjeta", "notas": "Compra semanal"}, {"id": "R0002", "fecha": "2026-07-08", "vivienda": "Calle Franco", "trabajador": "Mariluz", "tienda": "Carrefour", "importeTotal": 6.9, "metodoPago": "Efectivo", "notas": ""}], "productos": [{"idRecibo": "R0001", "familia": "Carnicería", "producto": "Pechuga de pollo", "cantidad": 1, "unidad": "kg", "precioUnitario": 6.5, "notas": ""}, {"idRecibo": "R0001", "familia": "Pescadería", "producto": "Salmón", "cantidad": 0.5, "unidad": "kg", "precioUnitario": 12.0, "notas": ""}, {"idRecibo": "R0001", "familia": "Limpieza del hogar", "producto": "Detergente", "cantidad": 1, "unidad": "unidad", "precioUnitario": 4.5, "notas": ""}, {"idRecibo": "R0001", "familia": "Carnicería", "producto": "Chuletas de cerdo", "cantidad": 1, "unidad": "kg", "precioUnitario": 7.2, "notas": "No estaba en el menú de esta semana"}, {"idRecibo": "R0002", "familia": "Despensa / Alimentación general", "producto": "Papel higiénico 12u", "cantidad": 1, "unidad": "paquete", "precioUnitario": 6.9, "notas": "Oferta 2x1"}], "menus": [{"id": "MEN001", "vivienda": "Manuel de la Quintana", "semanaInicio": "2026-06-29", "semanaFin": "2026-07-05", "platos": [{"dia": "Lunes", "plato": "Merluza a la plancha con ensalada", "ingredientePrincipal": "Merluza"}, {"dia": "Martes", "plato": "Pollo al horno con patatas", "ingredientePrincipal": "Pollo"}, {"dia": "Miércoles", "plato": "Salmón a la plancha con verduras", "ingredientePrincipal": "Salmón"}, {"dia": "Jueves", "plato": "Lentejas con chorizo", "ingredientePrincipal": "Chorizo"}]}]};
+
+const COLOR = {
+  vivienda: '#2a78d6', trabajador: '#2a78d6', tienda: '#2a78d6', familia: '#1baf7a',
+  emph: '#2a78d6', gray: (getComputedStyle(document.documentElement).getPropertyValue('--series-gray')||'#c3c2b7').trim()
+};
+const fmtEUR = n => '€' + n.toLocaleString('es-ES', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtDate = iso => { const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`; };
+// Familias que cuentan como "ingrediente principal" al cotejar con el menú semanal
+// (carne / pescado / congelados — se amplía caso por caso si aparece algo como frutos
+// secos u otro ingrediente con peso propio en un plato, a criterio de Claude al leer la foto)
+const FAMILIAS_PRINCIPALES = ['Carnicería', 'Pescadería', 'Congelados'];
+
+// ---- Join productos with recibo header fields ----
+function buildRows() {
+  const recibosById = {};
+  DATA.recibos.forEach(r => recibosById[r.id] = r);
+  return DATA.productos.map(p => {
+    const rec = recibosById[p.idRecibo] || {};
+    return {
+      idRecibo: p.idRecibo,
+      fecha: rec.fecha || '',
+      vivienda: rec.vivienda || '',
+      trabajador: rec.trabajador || '',
+      tienda: rec.tienda || '',
+      familia: p.familia,
+      producto: p.producto,
+      cantidad: p.cantidad,
+      unidad: p.unidad,
+      precioUnitario: p.precioUnitario,
+      precioLinea: Math.round(p.cantidad * p.precioUnitario * 100) / 100,
+      notas: p.notas || ''
+    };
+  });
+}
+const ALL_ROWS = buildRows();
+
+// ---- Populate filter dropdowns ----
+const selVivienda = document.getElementById('filterVivienda');
+const selTrabajador = document.getElementById('filterTrabajador');
+const selTienda = document.getElementById('filterTienda');
+const selPeriodo = document.getElementById('filterPeriodo');
+const inputDesde = document.getElementById('fechaDesde');
+const inputHasta = document.getElementById('fechaHasta');
+DATA.config.viviendas.forEach(c => { const o=document.createElement('option'); o.value=c; o.textContent=c; selVivienda.appendChild(o); });
+DATA.config.trabajadores.forEach(t => { const o=document.createElement('option'); o.value=t; o.textContent=t; selTrabajador.appendChild(o); });
+DATA.config.tiendas.forEach(t => { const o=document.createElement('option'); o.value=t; o.textContent=t; selTienda.appendChild(o); });
+
+let sortState = { key: 'fecha', dir: 1 };
+
+// ---- Date-range presets ("periodo") ----
+function pad2(n) { return String(n).padStart(2,'0'); }
+function toISODate(d) { return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+function startOfWeek(d) { const day = (d.getDay()+6)%7; const m = new Date(d); m.setDate(d.getDate()-day); return m; }
+function endOfWeek(d) { const s = startOfWeek(d); const e = new Date(s); e.setDate(s.getDate()+6); return e; }
+
+function applyPreset(preset) {
+  const now = new Date();
+  if (preset === 'todo') { inputDesde.value = ''; inputHasta.value = ''; return; }
+  if (preset === 'personalizado') return; // deja los campos como estén
+  let from, to;
+  if (preset === 'semana_actual') { from = startOfWeek(now); to = endOfWeek(now); }
+  else if (preset === 'semana_pasada') { const d = new Date(now); d.setDate(now.getDate()-7); from = startOfWeek(d); to = endOfWeek(d); }
+  else if (preset === 'mes_actual') { from = new Date(now.getFullYear(), now.getMonth(), 1); to = new Date(now.getFullYear(), now.getMonth()+1, 0); }
+  else if (preset === 'mes_pasado') { from = new Date(now.getFullYear(), now.getMonth()-1, 1); to = new Date(now.getFullYear(), now.getMonth(), 0); }
+  inputDesde.value = toISODate(from);
+  inputHasta.value = toISODate(to);
+}
+
+function getFilteredRows() {
+  const vivienda = selVivienda.value, trabajador = selTrabajador.value, tienda = selTienda.value,
+        q = document.getElementById('searchProducto').value.trim().toLowerCase(),
+        desde = inputDesde.value, hasta = inputHasta.value;
+  return ALL_ROWS.filter(r =>
+    (vivienda === '__all__' || r.vivienda === vivienda) &&
+    (trabajador === '__all__' || r.trabajador === trabajador) &&
+    (tienda === '__all__' || r.tienda === tienda) &&
+    (desde === '' || r.fecha >= desde) &&
+    (hasta === '' || r.fecha <= hasta) &&
+    (q === '' || r.producto.toLowerCase().includes(q))
+  );
+}
+
+function getFilteredReceiptIds(rows) {
+  return new Set(rows.map(r => r.idRecibo));
+}
+
+// ---- Tooltip ----
+const tooltip = document.getElementById('tooltip');
+function showTip(evt, html) {
+  tooltip.innerHTML = html;
+  tooltip.style.display = 'block';
+  tooltip.style.left = (evt.clientX + 14) + 'px';
+  tooltip.style.top = (evt.clientY + 14) + 'px';
+}
+function hideTip() { tooltip.style.display = 'none'; }
+
+// ---- Generic vertical bar chart ----
+function verticalBarChart(container, items, opts = {}) {
+  container.innerHTML = '';
+  if (!items.length) { container.innerHTML = '<p class="empty-note">Sin datos para este filtro.</p>'; return; }
+  const W = container.clientWidth || 420, H = 220, padL = 46, padB = 34, padT = 12, padR = 10;
+  const maxV = Math.max(...items.map(i => i.value), 0.01);
+  const chartW = W - padL - padR, chartH = H - padT - padB;
+  const bw = chartW / items.length;
+  const barW = Math.min(bw * 0.55, 48);
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('height', H);
+
+  // gridlines (4)
+  for (let i=0;i<=3;i++){
+    const y = padT + chartH - (chartH*i/3);
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1',padL); line.setAttribute('x2', W-padR);
+    line.setAttribute('y1',y); line.setAttribute('y2',y);
+    line.setAttribute('class', i===0 ? 'baseline' : 'gridline');
+    svg.appendChild(line);
+    const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
+    lbl.setAttribute('x', padL-6); lbl.setAttribute('y', y+3);
+    lbl.setAttribute('text-anchor','end'); lbl.setAttribute('class','axis-label');
+    lbl.textContent = fmtEUR(maxV*i/3);
+    svg.appendChild(lbl);
+  }
+
+  items.forEach((it, idx) => {
+    const x = padL + bw*idx + (bw-barW)/2;
+    const h = maxV > 0 ? (it.value/maxV)*chartH : 0;
+    const y = padT + chartH - h;
+    const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x', x); rect.setAttribute('y', y);
+    rect.setAttribute('width', barW); rect.setAttribute('height', Math.max(h,1));
+    rect.setAttribute('rx', 4);
+    rect.setAttribute('fill', it.color || opts.color || COLOR.vivienda);
+    rect.style.cursor = 'pointer';
+    rect.addEventListener('mousemove', e => showTip(e, `<b>${it.label}</b><br>${fmtEUR(it.value)}`));
+    rect.addEventListener('mouseleave', hideTip);
+    svg.appendChild(rect);
+
+    const val = document.createElementNS('http://www.w3.org/2000/svg','text');
+    val.setAttribute('x', x+barW/2); val.setAttribute('y', y-6);
+    val.setAttribute('text-anchor','middle'); val.setAttribute('class','bar-label');
+    val.textContent = it.value > 0 ? fmtEUR(it.value).replace('€','') : '';
+    svg.appendChild(val);
+
+    const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
+    lbl.setAttribute('x', x+barW/2); lbl.setAttribute('y', H-padB+16);
+    lbl.setAttribute('text-anchor','middle'); lbl.setAttribute('class','axis-label');
+    let txt = it.label;
+    if (txt.length > 10 && items.length > 4) txt = txt.slice(0,9)+'…';
+    lbl.textContent = txt;
+    svg.appendChild(lbl);
+  });
+
+  container.appendChild(svg);
+}
+
+// ---- Generic horizontal bar chart (for long labels) ----
+function horizontalBarChart(container, items, opts = {}) {
+  container.innerHTML = '';
+  if (!items.length) { container.innerHTML = '<p class="empty-note">Sin datos para este filtro.</p>'; return; }
+  const rowH = 28, padR = 56, padTB = 8;
+  const W = container.clientWidth || 420;
+  const padL = Math.max(80, Math.min(150, Math.round(W * 0.42)));
+  const H = padTB*2 + rowH*items.length;
+  const maxV = Math.max(...items.map(i => i.value), 0.01);
+  const chartW = W - padL - padR;
+  const maxChars = Math.max(6, Math.floor((padL - 14) / 6.2));
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('height', H);
+
+  const base = document.createElementNS('http://www.w3.org/2000/svg','line');
+  base.setAttribute('x1',padL); base.setAttribute('x2',padL);
+  base.setAttribute('y1',padTB); base.setAttribute('y2',H-padTB);
+  base.setAttribute('class','baseline');
+  svg.appendChild(base);
+
+  items.forEach((it, idx) => {
+    const y = padTB + rowH*idx + rowH*0.2;
+    const w = maxV > 0 ? (it.value/maxV)*chartW : 0;
+    const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x', padL); rect.setAttribute('y', y);
+    rect.setAttribute('width', Math.max(w,1)); rect.setAttribute('height', rowH*0.6);
+    rect.setAttribute('rx', 4);
+    rect.setAttribute('fill', it.color || opts.color || COLOR.familia);
+    rect.style.cursor = 'pointer';
+    rect.addEventListener('mousemove', e => showTip(e, `<b>${it.label}</b><br>${fmtEUR(it.value)}`));
+    rect.addEventListener('mouseleave', hideTip);
+    svg.appendChild(rect);
+
+    const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
+    lbl.setAttribute('x', padL-8); lbl.setAttribute('y', y + rowH*0.34);
+    lbl.setAttribute('text-anchor','end'); lbl.setAttribute('class','axis-label');
+    let txt = it.label;
+    if (txt.length > maxChars) txt = txt.slice(0, maxChars-1)+'…';
+    lbl.textContent = txt;
+    svg.appendChild(lbl);
+
+    const val = document.createElementNS('http://www.w3.org/2000/svg','text');
+    val.setAttribute('x', padL + w + 6); val.setAttribute('y', y + rowH*0.34);
+    val.setAttribute('text-anchor','start'); val.setAttribute('class','bar-label');
+    val.textContent = it.value > 0 ? fmtEUR(it.value) : '';
+    svg.appendChild(val);
+  });
+
+  container.appendChild(svg);
+}
+
+// ---- Sortable / searchable table ----
+function renderTable(rows) {
+  const wrap = document.getElementById('tableWrap');
+  if (!rows.length) { wrap.innerHTML = '<p class="empty-note">Sin productos para este filtro.</p>'; return; }
+  const cols = [
+    {key:'fecha', label:'Fecha', fmt: v => fmtDate(v)},
+    {key:'vivienda', label:'Vivienda'},
+    {key:'trabajador', label:'Trabajador'},
+    {key:'tienda', label:'Tienda'},
+    {key:'familia', label:'Familia'},
+    {key:'producto', label:'Producto'},
+    {key:'cantidad', label:'Cant.', num:true},
+    {key:'precioUnitario', label:'P. unit.', num:true, fmt: v => fmtEUR(v)},
+    {key:'precioLinea', label:'Importe', num:true, fmt: v => fmtEUR(v)},
+  ];
+  const sorted = [...rows].sort((a,b) => {
+    const k = sortState.key;
+    if (a[k] < b[k]) return -1*sortState.dir;
+    if (a[k] > b[k]) return 1*sortState.dir;
+    return 0;
+  });
+  let html = '<table><thead><tr>';
+  cols.forEach(c => {
+    const arrow = sortState.key === c.key ? (sortState.dir===1 ? ' ▲' : ' ▼') : '';
+    html += `<th class="${c.num?'num':''}" data-key="${c.key}">${c.label}${arrow}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+  sorted.forEach(r => {
+    html += '<tr>';
+    cols.forEach(c => {
+      const raw = r[c.key];
+      const disp = c.fmt ? c.fmt(raw) : raw;
+      html += `<td class="${c.num?'num':''}">${disp}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+  wrap.querySelectorAll('th').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.getAttribute('data-key');
+      if (sortState.key === key) sortState.dir *= -1; else { sortState.key = key; sortState.dir = 1; }
+      renderTable(getFilteredRows());
+    });
+  });
+}
+
+// ---- Master render ----
+function render() {
+  const rows = getFilteredRows();
+  const recIds = getFilteredReceiptIds(rows);
+  const recibos = DATA.recibos.filter(r => recIds.has(r.id));
+
+  // KPIs
+  const total = recibos.reduce((s,r) => s + r.importeTotal, 0);
+  document.getElementById('kpiTotal').textContent = fmtEUR(total);
+  document.getElementById('kpiRecibos').textContent = recibos.length;
+  document.getElementById('kpiMedio').textContent = recibos.length ? fmtEUR(total/recibos.length) : '–';
+
+  let maxRec = null;
+  const byDay = {};
+  recibos.forEach(r => { byDay[r.fecha] = (byDay[r.fecha]||0) + r.importeTotal; });
+  let maxDay = null, maxDayVal = -1;
+  Object.entries(byDay).forEach(([d,v]) => { if (v>maxDayVal){maxDayVal=v; maxDay=d;} });
+  document.getElementById('kpiDiaMax').textContent = maxDay ? fmtDate(maxDay) : '–';
+  document.getElementById('kpiDiaMaxSub').textContent = maxDay ? fmtEUR(maxDayVal) : '';
+
+  // Gasto por vivienda
+  const porVivienda = DATA.config.viviendas.map(c => ({
+    label: c, value: Math.round(recibos.filter(r=>r.vivienda===c).reduce((s,r)=>s+r.importeTotal,0)*100)/100, color: COLOR.vivienda
+  }));
+  verticalBarChart(document.getElementById('chartVivienda'), porVivienda);
+
+  // Gasto por trabajador
+  const porTrabajador = DATA.config.trabajadores.map(t => ({
+    label: t, value: Math.round(recibos.filter(r=>r.trabajador===t).reduce((s,r)=>s+r.importeTotal,0)*100)/100, color: COLOR.trabajador
+  }));
+  verticalBarChart(document.getElementById('chartTrabajador'), porTrabajador);
+
+  // Gasto por tienda
+  const porTienda = DATA.config.tiendas.map(t => ({
+    label: t, value: Math.round(recibos.filter(r=>r.tienda===t).reduce((s,r)=>s+r.importeTotal,0)*100)/100, color: COLOR.tienda
+  })).filter(x => selTienda.value === '__all__' || x.label === selTienda.value);
+  verticalBarChart(document.getElementById('chartTienda'), porTienda);
+
+  // Gasto por familia (horizontal, ordenado desc)
+  const porFamilia = DATA.config.familias.map(f => ({
+    label: f, value: Math.round(rows.filter(r=>r.familia===f).reduce((s,r)=>s+r.precioLinea,0)*100)/100, color: COLOR.familia
+  })).filter(x => x.value > 0).sort((a,b)=>b.value-a.value);
+  horizontalBarChart(document.getElementById('chartFamilia'), porFamilia);
+
+  // Gasto por día (emphasis en el máximo)
+  const dias = Object.entries(byDay).sort((a,b) => a[0].localeCompare(b[0]));
+  const porDia = dias.map(([d,v]) => ({
+    label: fmtDate(d).slice(0,5), value: Math.round(v*100)/100,
+    color: d === maxDay ? COLOR.emph : COLOR.gray
+  }));
+  verticalBarChart(document.getElementById('chartDia'), porDia);
+
+  renderTable(rows);
+}
+
+selVivienda.addEventListener('change', render);
+selTrabajador.addEventListener('change', render);
+selTienda.addEventListener('change', render);
+selPeriodo.addEventListener('change', () => { applyPreset(selPeriodo.value); render(); });
+inputDesde.addEventListener('change', () => { selPeriodo.value = 'personalizado'; render(); });
+inputHasta.addEventListener('change', () => { selPeriodo.value = 'personalizado'; render(); });
+document.getElementById('searchProducto').addEventListener('input', render);
+window.addEventListener('resize', render);
+
+// ---- Exportar a hoja de cálculo (CSV, sin dependencias externas — funciona offline) ----
+function csvEscape(val) {
+  const s = String(val ?? '');
+  if (/[";\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+function exportToCSV() {
+  const rows = getFilteredRows();
+  if (!rows.length) {
+    alert('No hay datos para exportar con los filtros actuales.');
+    return;
+  }
+  const headers = ['ID Recibo','Fecha','Vivienda','Trabajador','Tienda','Familia','Producto',
+                    'Cantidad','Unidad','Precio unitario (€)','Importe (€)','Notas'];
+  const lines = [headers.map(csvEscape).join(';')];
+  [...rows].sort((a,b) => a.fecha.localeCompare(b.fecha)).forEach(r => {
+    lines.push([
+      r.idRecibo, fmtDate(r.fecha), r.vivienda, r.trabajador, r.tienda, r.familia, r.producto,
+      r.cantidad, r.unidad, r.precioUnitario.toFixed(2), r.precioLinea.toFixed(2), r.notas || ''
+    ].map(csvEscape).join(';'));
+  });
+  // BOM para que Excel detecte UTF-8 y no rompa las tildes/ñ
+  const csv = '﻿' + lines.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const now = new Date();
+  const stamp = `${now.getFullYear()}-${pad2(now.getMonth()+1)}-${pad2(now.getDate())}`;
+  a.href = url;
+  a.download = `inventario_compras_${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+document.getElementById('btnExport').addEventListener('click', exportToCSV);
+
+// ---- Menú semanal vs. compra ----
+function normalize(s) {
+  return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+const selMenu = document.getElementById('selMenu');
+const MENUS = DATA.menus || [];
+MENUS.forEach((m, idx) => {
+  const o = document.createElement('option');
+  o.value = idx;
+  o.textContent = `${m.vivienda} — ${fmtDate(m.semanaInicio)} al ${fmtDate(m.semanaFin)}`;
+  selMenu.appendChild(o);
+});
+
+function renderMenuCheck(idx) {
+  const wrap = document.getElementById('menuCheckWrap');
+  const summary = document.getElementById('menuSummary');
+  if (!MENUS.length) {
+    wrap.innerHTML = '';
+    summary.innerHTML = '<p class="empty-note">Todavía no hay ningún menú semanal añadido. Envíame la foto del menú para empezar.</p>';
+    document.getElementById('offMenuSummary').innerHTML = '';
+    document.getElementById('offMenuWrap').innerHTML = '';
+    return;
+  }
+  const menu = MENUS[idx];
+  const weekRows = ALL_ROWS.filter(r => r.vivienda === menu.vivienda && r.fecha >= menu.semanaInicio && r.fecha <= menu.semanaFin);
+  const nameList = weekRows.map(r => normalize(r.producto));
+  const checked = menu.platos.map(p => {
+    const ing = normalize(p.ingredientePrincipal);
+    const found = nameList.some(n => n.includes(ing) || ing.includes(n));
+    return { ...p, found };
+  });
+  const foundCount = checked.filter(c => c.found).length;
+  summary.innerHTML = `<p style="font-size:14px;margin:0 0 12px;">` +
+    `<b>${foundCount} de ${checked.length}</b> ingredientes principales están entre lo comprado esa semana ` +
+    `para <b>${menu.vivienda}</b> (${fmtDate(menu.semanaInicio)}–${fmtDate(menu.semanaFin)}).</p>`;
+
+  let html = '<table><thead><tr><th>Día</th><th>Plato</th><th>Ingrediente principal</th><th>Estado</th></tr></thead><tbody>';
+  checked.forEach(c => {
+    const pill = c.found
+      ? '<span class="status-pill status-ok">✓ Comprado</span>'
+      : '<span class="status-pill status-missing">✕ Falta</span>';
+    html += `<tr><td>${c.dia}</td><td>${c.plato}</td><td>${c.ingredientePrincipal}</td><td>${pill}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+
+  renderOffMenu(menu, weekRows, checked);
+}
+
+function renderOffMenu(menu, weekRows, checked) {
+  const offWrap = document.getElementById('offMenuWrap');
+  const offSummary = document.getElementById('offMenuSummary');
+  const menuIngredientesNorm = checked.map(c => normalize(c.ingredientePrincipal));
+  const principales = weekRows.filter(r => FAMILIAS_PRINCIPALES.includes(r.familia));
+  const fueraDeMenu = principales.filter(r => {
+    const pname = normalize(r.producto);
+    return !menuIngredientesNorm.some(ing => pname.includes(ing) || ing.includes(pname));
+  });
+
+  if (!fueraDeMenu.length) {
+    offSummary.innerHTML = '<p style="font-size:14px;margin:0 0 10px;">Ninguna — todo lo que se compró esa semana en carnicería/pescadería/congelados encaja con el menú.</p>';
+    offWrap.innerHTML = '';
+    return;
+  }
+  const totalFuera = Math.round(fueraDeMenu.reduce((s,r)=>s+r.precioLinea,0)*100)/100;
+  offSummary.innerHTML = `<p style="font-size:14px;margin:0 0 10px;"><b>${fueraDeMenu.length} producto(s)</b> por un total de <b>${fmtEUR(totalFuera)}</b> no estaban en el menú de esa semana.</p>`;
+
+  let html = '<table><thead><tr><th>Producto</th><th>Familia</th><th>Tienda</th><th class="num">Importe</th></tr></thead><tbody>';
+  fueraDeMenu.forEach(r => {
+    html += `<tr><td>${r.producto}</td><td>${r.familia}</td><td>${r.tienda}</td><td class="num">${fmtEUR(r.precioLinea)}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  offWrap.innerHTML = html;
+}
+
+selMenu.addEventListener('change', () => renderMenuCheck(Number(selMenu.value)));
+if (MENUS.length) renderMenuCheck(0);
+else renderMenuCheck(0);
+
+// ---- Photo picker (preview only — processing happens via chat) ----
+document.getElementById('receiptPhoto').addEventListener('change', e => {
+  const file = e.target.files[0];
+  const preview = document.getElementById('photoPreview');
+  const hint = document.getElementById('photoHint');
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  preview.src = url;
+  preview.style.display = 'block';
+  hint.textContent = 'Foto lista — ahora envíasela a Claude en el chat para procesarla.';
+});
+
+render();
+
+// ---- Registro del service worker (solo funciona alojado en https, no en file://) ----
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
